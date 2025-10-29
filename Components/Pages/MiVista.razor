@@ -1,0 +1,110 @@
+﻿@page "/MiVista"
+@using xx.Components.Data
+@rendermode InteractiveServer
+@inject Servicio.ServicioControlador ServicioControlador
+<h3>Juego wuuuu</h3>
+
+<input type="checkbox" @bind="ServicioControlador.MostrarSoloPendientes" /> Mostrar solo pendientes
+
+@if (!string.IsNullOrEmpty(Mensaje))
+{
+    <p style="color: @(Mensaje.StartsWith("Error") ? "red" : "green");">
+        @Mensaje
+    </p>
+}
+
+<ul>
+    @foreach (var j in JuegosFiltrados)
+    {
+        <li>
+            @j.Nombre
+            @(j.Jugado ? "Ya jugado" : "Pendiente")
+            <input type="checkbox" checked="@j.Jugado" @onclick="() => cambiarJugado(j)" />
+        </li>
+    }
+</ul>
+
+<div>
+    <input @bind="newJuego.Nombre"
+           placeholder="Nuevo juego" />
+    <button @onclick="AgregarJuego">Agregar Juego</button>
+
+</div>
+
+<div>
+    <input @bind="DeleteJuego.Nombre"
+           placeholder="Nombre del juego a eliminar" />
+    <button @onclick="EliminarJuego">Eliminar Juego</button>
+
+</div>
+@code {
+    private List<Juego> juegos = new();
+    private Juego newJuego = new();
+    private Juego DeleteJuego = new();
+    private string Mensaje = string.Empty;
+
+    private IEnumerable<Juego> JuegosFiltrados => ServicioControlador.MostrarSoloPendientes
+        ?
+    juegos.Where(j => !j.Jugado).ToList()
+        : juegos;
+
+    private async Task cambiarJugado(Juego juego)
+    {
+        Mensaje = string.Empty;
+        juego.Jugado = !juego.Jugado;
+        await ServicioControlador.ActualizarJuego(juego);
+        StateHasChanged();
+    }
+
+    private async Task AgregarJuego()
+    {
+        Mensaje = string.Empty;
+        if (!string.IsNullOrWhiteSpace(newJuego.Nombre))
+        {
+            if (juegos.Any(j => j.Nombre.Equals(newJuego.Nombre, StringComparison.OrdinalIgnoreCase)))
+            {
+                Mensaje = $"Error: El juego '{newJuego.Nombre}' ya existe.";
+            }
+            else
+            {
+                await ServicioControlador.AgregarJuego(newJuego);
+                juegos = await ServicioControlador.ObtenerJuegos();
+                Mensaje = $"Éxito: Juego '{newJuego.Nombre}' agregado.";
+                newJuego = new();
+            }
+            StateHasChanged();
+        }
+    }
+
+    private async Task EliminarJuego()
+    {
+        Mensaje = string.Empty;
+        if (string.IsNullOrWhiteSpace(DeleteJuego.Nombre))
+        {
+            Mensaje = "Error: Por favor, ingrese el nombre del juego a eliminar.";
+            StateHasChanged();
+            return;
+        }
+
+        var juegoAEliminar = juegos.FirstOrDefault(j => j.Nombre.Equals(DeleteJuego.Nombre, StringComparison.OrdinalIgnoreCase));
+
+        if (juegoAEliminar != null)
+        {
+            await ServicioControlador.EliminarJuego(DeleteJuego.Nombre);
+
+            juegos = await ServicioControlador.ObtenerJuegos();
+            Mensaje = $"Éxito: Juego '{DeleteJuego.Nombre}' eliminado.";
+            DeleteJuego = new();
+        }
+        else
+        {
+            Mensaje = $"Error: El juego '{DeleteJuego.Nombre}' no se encontró.";
+        }
+        StateHasChanged();
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        juegos = await ServicioControlador.ObtenerJuegos();
+    }
+}
