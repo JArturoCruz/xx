@@ -9,10 +9,9 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
+// Se registra ServicioJuegos y ServicioControlador
 builder.Services.AddSingleton<ServicioControlador>();
 builder.Services.AddSingleton<ServicioJuegos>();
-builder.Services.AddScoped<ServicioVista>();
-
 
 
 var app = builder.Build();
@@ -36,12 +35,23 @@ app.MapRazorComponents<App>()
 
 String ruta = "mibase.db";
 
-using var conexion = new SqliteConnection($"DataSource ={ ruta }");
+// Inicialización de la base de datos: se añade la tabla de configuración
+using var conexion = new SqliteConnection($"DataSource ={ruta}");
 conexion.Open();
 var comando = conexion.CreateCommand();
+
 comando.CommandText = @"
-create table if not exist
-juego( identificador integer, nombre text, jugado integer)
+    CREATE TABLE IF NOT EXISTS
+    juego( identificador integer, nombre text, jugado integer);
+
+    -- Nueva tabla para guardar configuraciones persistentes
+    CREATE TABLE IF NOT EXISTS
+    configuracion( clave TEXT PRIMARY KEY, valor TEXT);
+
+    -- Insertar el estado inicial del filtro ('False') si no existe
+    INSERT OR IGNORE INTO configuracion (clave, valor) VALUES ('MostrarSoloPendientes', 'False');
 ";
 comando.ExecuteNonQuery();
+conexion.Close(); // Cerrar la conexión de inicialización.
+
 app.Run();

@@ -4,7 +4,10 @@
 @inject Servicio.ServicioControlador ServicioControlador
 <h3>Juego wuuuu</h3>
 
-<input type="checkbox" @bind="ServicioControlador.MostrarSoloPendientes" /> Mostrar solo pendientes
+@* Se reemplaza @bind por checked y @onchange para guardar el estado de forma persistente *@
+<input type="checkbox"
+       checked="@ServicioControlador.MostrarSoloPendientes"
+       @onchange="CambiarEstadoFiltro" /> Mostrar solo pendientes
 
 @if (!string.IsNullOrEmpty(Mensaje))
 {
@@ -19,9 +22,10 @@
         <li>
             @j.Nombre
             @(j.Jugado ? "Ya jugado" : "Pendiente")
-            <input type="checkbox" checked="@j.Jugado" @onclick="() => cambiarJugado(j)" />
-        </li>
-    }
+            <input type="checkbox" checked="@j.Jugado" @onclick="()
+                                                       => cambiarJugado(j)" />
+    </li>
+        }
 </ul>
 
 <div>
@@ -42,17 +46,32 @@
     private Juego newJuego = new();
     private Juego DeleteJuego = new();
     private string Mensaje = string.Empty;
-
     private IEnumerable<Juego> JuegosFiltrados => ServicioControlador.MostrarSoloPendientes
         ?
-    juegos.Where(j => !j.Jugado).ToList()
+        juegos.Where(j => !j.Jugado).ToList()
         : juegos;
+
+    // Método que maneja el cambio del checkbox, actualiza el estado y lo guarda
+    private async Task CambiarEstadoFiltro(ChangeEventArgs e)
+    {
+        bool nuevoEstado = (bool)e.Value;
+
+        // 1. Actualiza el estado en memoria del controlador
+        ServicioControlador.MostrarSoloPendientes = nuevoEstado;
+
+        // 2. Guarda el estado de forma persistente en la base de datos
+        await ServicioControlador.GuardarEstadoFiltro();
+
+        // 3. Forzar la re-renderización para aplicar el filtro de inmediato
+        StateHasChanged();
+    }
 
     private async Task cambiarJugado(Juego juego)
     {
         Mensaje = string.Empty;
         juego.Jugado = !juego.Jugado;
         await ServicioControlador.ActualizarJuego(juego);
+        juegos = await ServicioControlador.ObtenerJuegos();
         StateHasChanged();
     }
 
@@ -87,11 +106,9 @@
         }
 
         var juegoAEliminar = juegos.FirstOrDefault(j => j.Nombre.Equals(DeleteJuego.Nombre, StringComparison.OrdinalIgnoreCase));
-
         if (juegoAEliminar != null)
         {
             await ServicioControlador.EliminarJuego(DeleteJuego.Nombre);
-
             juegos = await ServicioControlador.ObtenerJuegos();
             Mensaje = $"Éxito: Juego '{DeleteJuego.Nombre}' eliminado.";
             DeleteJuego = new();
@@ -105,6 +122,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Cargar el estado persistente del filtro antes de cargar los juegos
+        await ServicioControlador.CargarEstadoFiltro();
         juegos = await ServicioControlador.ObtenerJuegos();
     }
 }
