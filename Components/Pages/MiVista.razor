@@ -4,10 +4,48 @@
 @inject Servicio.ServicioControlador ServicioControlador
 <h3>Juego wuuuu</h3>
 
-@* Se reemplaza @bind por checked y @onchange para guardar el estado de forma persistente *@
-<input type="checkbox"
-       checked="@ServicioControlador.MostrarSoloPendientes"
-       @onchange="CambiarEstadoFiltro" /> Mostrar solo pendientes
+<style>
+    ul {
+        list-style-type: none;
+        padding-left: 0;
+    }
+
+    li {
+        margin-bottom: 8px;
+        padding: 10px;
+        border: 1px solid #ccc;
+        border-radius: 5px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+    }
+
+        li > span {
+            flex-grow: 1;
+        }
+
+        li button {
+            margin-left: 5px;
+        }
+</style>
+
+<div>
+    <input type="checkbox" id="filtroPendientes"
+           checked="@ServicioControlador.MostrarSoloPendientes"
+           @onchange="CambiarEstadoFiltro" />
+    <label for="filtroPendientes">Mostrar solo pendientes</label>
+</div>
+
+<div>
+    <label for="filtroNombre">Buscar por nombre:</label>
+    <input id="filtroNombre"
+           value="@ServicioControlador.FiltroNombre"
+           @oninput="OnFiltroNombreChanged"
+           placeholder="Filtrar por nombre..." />
+
+    <button @onclick="LimpiarFiltroNombre" class="btn btn-secondary btn-sm">Limpiar</button>
+</div>
+
 
 @if (!string.IsNullOrEmpty(Mensaje))
 {
@@ -20,49 +58,79 @@
     @foreach (var j in JuegosFiltrados)
     {
         <li>
-            @j.Nombre
-            @(j.Jugado ? "Ya jugado" : "Pendiente")
-            <input type="checkbox" checked="@j.Jugado" @onclick="()
-                                                       => cambiarJugado(j)" />
-    </li>
-        }
+            @if (juegoEnEdicion?.Identificador == j.Identificador)
+            {
+                <input @bind="nombreTemporalEdicion" class="form-control" />
+                <button @onclick="GuardarEdicion" class="btn btn-success btn-sm">💾</button>
+                <button @onclick="CancelarEdicion" class="btn btn-secondary btn-sm">❌</button>
+            }
+            else
+            {
+                <span>
+                    @j.Nombre
+                    (@(j.Jugado ? "Ya jugado" : "Pendiente"))
+                </span>
+                <input type="checkbox" class="form-check-input" checked="@j.Jugado" @onclick="() => cambiarJugado(j)" />
+                <button @onclick="() => IniciarEdicion(j)" class="btn btn-warning btn-sm">✏️</button>
+                <button @onclick="() => EliminarJuego(j)" class="btn btn-danger btn-sm">🗑️</button>
+            }
+        </li>
+    }
 </ul>
 
 <div>
     <input @bind="newJuego.Nombre"
            placeholder="Nuevo juego" />
     <button @onclick="AgregarJuego">Agregar Juego</button>
-
 </div>
 
-<div>
-    <input @bind="DeleteJuego.Nombre"
-           placeholder="Nombre del juego a eliminar" />
-    <button @onclick="EliminarJuego">Eliminar Juego</button>
-
-</div>
 @code {
     private List<Juego> juegos = new();
     private Juego newJuego = new();
-    private Juego DeleteJuego = new();
     private string Mensaje = string.Empty;
-    private IEnumerable<Juego> JuegosFiltrados => ServicioControlador.MostrarSoloPendientes
-        ?
-        juegos.Where(j => !j.Jugado).ToList()
-        : juegos;
 
-    // Método que maneja el cambio del checkbox, actualiza el estado y lo guarda
+    private Juego? juegoEnEdicion = null;
+    private string nombreTemporalEdicion = "";
+
+    private IEnumerable<Juego> JuegosFiltrados
+    {
+        get
+        {
+            IEnumerable<Juego> filtrados = juegos;
+
+            if (ServicioControlador.MostrarSoloPendientes)
+            {
+                filtrados = filtrados.Where(j => !j.Jugado);
+            }
+
+            if (!string.IsNullOrWhiteSpace(ServicioControlador.FiltroNombre))
+            {
+                filtrados = filtrados.Where(j =>
+                    j.Nombre.Contains(ServicioControlador.FiltroNombre, StringComparison.OrdinalIgnoreCase));
+            }
+
+            return filtrados.ToList();
+        }
+    }
+
     private async Task CambiarEstadoFiltro(ChangeEventArgs e)
     {
         bool nuevoEstado = (bool)e.Value;
-
-        // 1. Actualiza el estado en memoria del controlador
         ServicioControlador.MostrarSoloPendientes = nuevoEstado;
-
-        // 2. Guarda el estado de forma persistente en la base de datos
         await ServicioControlador.GuardarEstadoFiltro();
+        StateHasChanged();
+    }
 
-        // 3. Forzar la re-renderización para aplicar el filtro de inmediato
+    private async Task OnFiltroNombreChanged(ChangeEventArgs e)
+    {
+        ServicioControlador.FiltroNombre = e.Value?.ToString() ?? string.Empty;
+        await ServicioControlador.GuardarFiltroNombre();
+    }
+
+    private async Task LimpiarFiltroNombre()
+    {
+        ServicioControlador.FiltroNombre = string.Empty;
+        await ServicioControlador.GuardarFiltroNombre();
         StateHasChanged();
     }
 
@@ -95,35 +163,60 @@
         }
     }
 
-    private async Task EliminarJuego()
+    private void IniciarEdicion(Juego juego)
     {
+        juegoEnEdicion = juego;
+        nombreTemporalEdicion = juego.Nombre;
         Mensaje = string.Empty;
-        if (string.IsNullOrWhiteSpace(DeleteJuego.Nombre))
+        StateHasChanged();
+    }
+
+    private void CancelarEdicion()
+    {
+        juegoEnEdicion = null;
+        StateHasChanged();
+    }
+
+    private async Task GuardarEdicion()
+    {
+        if (juegoEnEdicion == null || string.IsNullOrWhiteSpace(nombreTemporalEdicion))
         {
-            Mensaje = "Error: Por favor, ingrese el nombre del juego a eliminar.";
+            Mensaje = "Error: El nombre no puede estar vacío.";
             StateHasChanged();
             return;
         }
 
-        var juegoAEliminar = juegos.FirstOrDefault(j => j.Nombre.Equals(DeleteJuego.Nombre, StringComparison.OrdinalIgnoreCase));
-        if (juegoAEliminar != null)
+        if (juegos.Any(j => j.Nombre.Equals(nombreTemporalEdicion, StringComparison.OrdinalIgnoreCase) && j.Identificador != juegoEnEdicion.Identificador))
         {
-            await ServicioControlador.EliminarJuego(DeleteJuego.Nombre);
-            juegos = await ServicioControlador.ObtenerJuegos();
-            Mensaje = $"Éxito: Juego '{DeleteJuego.Nombre}' eliminado.";
-            DeleteJuego = new();
+            Mensaje = $"Error: El nombre '{nombreTemporalEdicion}' ya existe.";
+            StateHasChanged();
+            return;
         }
-        else
-        {
-            Mensaje = $"Error: El juego '{DeleteJuego.Nombre}' no se encontró.";
-        }
+
+        string nombreAntiguo = juegoEnEdicion.Nombre;
+
+        await ServicioControlador.ActualizarNombreJuego(juegoEnEdicion.Identificador, nombreTemporalEdicion);
+
+        juegos = await ServicioControlador.ObtenerJuegos();
+        Mensaje = $"Éxito: Juego '{nombreAntiguo}' actualizado a '{nombreTemporalEdicion}'.";
+
+        juegoEnEdicion = null;
+        StateHasChanged();
+    }
+
+    private async Task EliminarJuego(Juego juegoAEliminar)
+    {
+        Mensaje = string.Empty;
+        await ServicioControlador.EliminarJuego(juegoAEliminar.Identificador);
+        juegos = await ServicioControlador.ObtenerJuegos();
+        Mensaje = $"Éxito: Juego '{juegoAEliminar.Nombre}' eliminado.";
         StateHasChanged();
     }
 
     protected override async Task OnInitializedAsync()
     {
-        // Cargar el estado persistente del filtro antes de cargar los juegos
         await ServicioControlador.CargarEstadoFiltro();
+        await ServicioControlador.CargarFiltroNombre();
         juegos = await ServicioControlador.ObtenerJuegos();
     }
 }

@@ -5,18 +5,15 @@ using xx.Components.Servicio;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Add services to the container.
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
-// Se registra ServicioJuegos y ServicioControlador
 builder.Services.AddSingleton<ServicioControlador>();
 builder.Services.AddSingleton<ServicioJuegos>();
 
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
@@ -35,7 +32,6 @@ app.MapRazorComponents<App>()
 
 String ruta = "mibase.db";
 
-// Inicialización de la base de datos: se añade la tabla de configuración
 using var conexion = new SqliteConnection($"DataSource ={ruta}");
 conexion.Open();
 var comando = conexion.CreateCommand();
@@ -50,8 +46,11 @@ comando.CommandText = @"
 
     -- Insertar el estado inicial del filtro ('False') si no existe
     INSERT OR IGNORE INTO configuracion (clave, valor) VALUES ('MostrarSoloPendientes', 'False');
+
+    -- --- LÍNEA NUEVA AÑADIDA ---
+    -- Insertar el estado inicial del filtro de nombre (vacío) si no existe
+    INSERT OR IGNORE INTO configuracion (clave, valor) VALUES ('FiltroNombre', '');
 ";
 comando.ExecuteNonQuery();
-conexion.Close(); // Cerrar la conexión de inicialización.
-
+conexion.Close(); 
 app.Run();

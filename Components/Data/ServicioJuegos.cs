@@ -9,9 +9,9 @@ namespace xx.Components.Data
     {
         private List<Juego> juegos = new List<Juego>();
 
+
         public async Task<List<Juego>> ObtenerJuegos()
         {
-            // Lógica para cargar desde la DB solo si la lista en memoria está vacía
             if (!juegos.Any())
             {
                 String ruta = "mibase.db";
@@ -72,22 +72,41 @@ namespace xx.Components.Data
             }
         }
 
-        public async Task EliminarJuego(string nombre)
+        public async Task ActualizarNombreJuego(int identificador, string nuevoNombre)
         {
             String ruta = "mibase.db";
             using var conexion = new SqliteConnection($"Datasource={ruta}");
             await conexion.OpenAsync();
 
             var comando = conexion.CreateCommand();
-            comando.CommandText = "DELETE FROM juego WHERE nombre = @NOMBRE";
-            comando.Parameters.AddWithValue("@NOMBRE", nombre);
+            comando.CommandText = "UPDATE juego SET nombre = @NOMBRE WHERE identificador = @IDENTIFICADOR";
+            comando.Parameters.AddWithValue("@NOMBRE", nuevoNombre);
+            comando.Parameters.AddWithValue("@IDENTIFICADOR", identificador);
 
             await comando.ExecuteNonQueryAsync();
 
-            juegos.RemoveAll(j => j.Nombre.Equals(nombre, StringComparison.OrdinalIgnoreCase));
+            var juegoExistente = juegos.FirstOrDefault(j => j.Identificador == identificador);
+            if (juegoExistente != null)
+            {
+                juegoExistente.Nombre = nuevoNombre;
+            }
         }
 
-        // MÉTODOS DE PERSISTENCIA DEL ESTADO DEL FILTRO
+        public async Task EliminarJuego(int identificador)
+        {
+            String ruta = "mibase.db";
+            using var conexion = new SqliteConnection($"Datasource={ruta}");
+            await conexion.OpenAsync();
+
+            var comando = conexion.CreateCommand();
+            comando.CommandText = "DELETE FROM juego WHERE identificador = @IDENTIFICADOR";
+            comando.Parameters.AddWithValue("@IDENTIFICADOR", identificador);
+
+            await comando.ExecuteNonQueryAsync();
+
+            juegos.RemoveAll(j => j.Identificador == identificador);
+        }
+
 
         public async Task<bool> ObtenerEstadoFiltro()
         {
@@ -100,7 +119,6 @@ namespace xx.Components.Data
 
             var resultado = await comando.ExecuteScalarAsync();
 
-            // Si encuentra el valor, lo parsea a booleano, si no, devuelve false (por defecto)
             if (resultado != null && resultado != DBNull.Value && bool.TryParse(resultado.ToString(), out bool estado))
             {
                 return estado;
@@ -117,12 +135,42 @@ namespace xx.Components.Data
 
             var comando = conexion.CreateCommand();
 
-            // INSERT OR REPLACE asegura que el valor se actualice si ya existe
             comando.CommandText = @"
                 INSERT OR REPLACE INTO configuracion (clave, valor)
                 VALUES ('MostrarSoloPendientes', @VALOR)
             ";
             comando.Parameters.AddWithValue("@VALOR", estado.ToString());
+
+            await comando.ExecuteNonQueryAsync();
+        }
+
+        public async Task<string> ObtenerFiltroNombre()
+        {
+            String ruta = "mibase.db";
+            using var conexion = new SqliteConnection($"Datasource={ruta}");
+            await conexion.OpenAsync();
+
+            var comando = conexion.CreateCommand();
+            comando.CommandText = "SELECT valor FROM configuracion WHERE clave = 'FiltroNombre'";
+
+            var resultado = await comando.ExecuteScalarAsync();
+
+            return resultado?.ToString() ?? string.Empty;
+        }
+
+        public async Task GuardarFiltroNombre(string nombre)
+        {
+            String ruta = "mibase.db";
+            using var conexion = new SqliteConnection($"Datasource={ruta}");
+            await conexion.OpenAsync();
+
+            var comando = conexion.CreateCommand();
+
+            comando.CommandText = @"
+                INSERT OR REPLACE INTO configuracion (clave, valor)
+                VALUES ('FiltroNombre', @VALOR)
+            ";
+            comando.Parameters.AddWithValue("@VALOR", nombre ?? string.Empty);
 
             await comando.ExecuteNonQueryAsync();
         }

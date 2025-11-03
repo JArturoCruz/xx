@@ -6,22 +6,26 @@ namespace xx.Components.Servicio
     {
         private readonly ServicioJuegos _servicioJuegos;
 
-        // El estado del filtro se almacena aquí en memoria
         private bool _mostrarSoloPendientes = false;
+        private string _filtroNombre = string.Empty;
 
         public ServicioControlador(ServicioJuegos servicioJuegos)
         {
             _servicioJuegos = servicioJuegos;
         }
 
-        // Propiedad pública que lee/escribe el estado en memoria
         public bool MostrarSoloPendientes
         {
             get => _mostrarSoloPendientes;
             set => _mostrarSoloPendientes = value;
         }
 
-        // Nuevos métodos para gestionar la persistencia
+        public string FiltroNombre
+        {
+            get => _filtroNombre;
+            set => _filtroNombre = value;
+        }
+
         public async Task CargarEstadoFiltro()
         {
             _mostrarSoloPendientes = await _servicioJuegos.ObtenerEstadoFiltro();
@@ -32,7 +36,16 @@ namespace xx.Components.Servicio
             await _servicioJuegos.GuardarEstadoFiltro(_mostrarSoloPendientes);
         }
 
-        // Métodos de CRUD (se mantienen igual)
+        public async Task CargarFiltroNombre()
+        {
+            _filtroNombre = await _servicioJuegos.ObtenerFiltroNombre();
+        }
+
+        public async Task GuardarFiltroNombre()
+        {
+            await _servicioJuegos.GuardarFiltroNombre(_filtroNombre);
+        }
+
         public async Task<List<Juego>> ObtenerJuegos()
         {
             return await _servicioJuegos.ObtenerJuegos();
@@ -49,17 +62,20 @@ namespace xx.Components.Servicio
             await _servicioJuegos.ActualizarJuego(juego);
         }
 
+        public async Task ActualizarNombreJuego(int identificador, string nuevoNombre)
+        {
+            await _servicioJuegos.ActualizarNombreJuego(identificador, nuevoNombre);
+        }
+
         private async Task<int> GenerarNuevoID()
         {
             var juegos = await _servicioJuegos.ObtenerJuegos();
             return juegos.Any() ? juegos.Max(j => j.Identificador) + 1 : 1;
         }
 
-        public async Task EliminarJuego(String juego)
+        public async Task EliminarJuego(int identificador)
         {
-            await _servicioJuegos.EliminarJuego(juego);
+            await _servicioJuegos.EliminarJuego(identificador);
         }
-
-
     }
 }
